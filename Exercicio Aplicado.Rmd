@@ -1,0 +1,92 @@
+---
+title: "Exercício Aplicado 1 - Rodrigo Carvalho - Econometria Mestrado"
+author: "Rodrigo Carvalho"
+date: "26/03/2022"
+output: html_document
+ 
+---
+# Exercício Aplicado - Econometria Mestrado
+## Rodrigo Carvalho da Silva - M013.122.008
+
+
+```{r read.csv}
+library(dplyr)
+tabela <- read.csv("greene3.csv", header = TRUE, sep = ";", stringsAsFactors = FALSE)
+tabela
+
+```
+
+``` {r lm1}
+lm1 <- lm (Wage~Education+Experience+Ability, data = tabela)
+summary(lm1)
+```
+
+######  Regressão de y em X~1~ e X~2~: lm2
+``` {r lm2}
+lm2 <- lm (Wage~Education+Experience+Ability+Mother.s.education+
+            Father.s.education+Siblings, data = tabela)
+summary(lm2)
+```
+
+``` {r lm3}
+lm3 <- lm (Mother.s.education~Education+Experience+Ability, data = tabela)
+summary(lm3)
+rlm3 <-mean(residuals.lm(lm3))
+rlm3
+```
+
+``` {r lm4}
+lm4 <- lm (Father.s.education~Education+Experience+Ability, data = tabela)
+summary(lm4)
+rlm4 <- mean(residuals.lm(lm4))
+rlm4
+```
+
+``` {r lm5}
+lm5 <- lm (Siblings~Education+Experience+Ability, data = tabela)
+summary(lm5)
+rlm5 <-mean(residuals.lm(lm5))
+rlm5
+```
+
+``` {r matrix}
+vetor <- c(rlm3, rlm4, rlm5)
+vetor
+X2_asterisco <- matrix( vetor, nrow = 3)
+X2_asterisco
+mean(X2_asterisco)
+```
+
+###### Regressão de y em X~1~ e X*~2~: lm6
+``` {r lm6}
+
+  
+rlm3_ <- residuals.lm(lm3)
+rlm4_ <- residuals.lm(lm4)
+rlm5_ <- residuals.lm(lm5)
+lm6 <- lm(Wage~Education+Experience+Ability+rlm3_+rlm4_+rlm5_, data = tabela)
+summary(lm6)
+
+
+```
+
+### Explicações
+
+* O R^2^ da regressão de **y** em X~1~ é 0.1834      
+  E o R^2^ da regressão de **y** em X~1~ e X~2~ é 0.5161.       
+  Isso decorre que ao aumentar as variáveis do modelo tem-se o aumento do R^2^,       
+  logo pode-se usar o R^2^ para conhecer o poder explicativo do modelo, mas não       
+  é indicado para comparar modelos com quantidades diferentes de variáveis explicativas.
+
+* O R^2^ ajustado da regressão de **y** em em X~1~ e X~2~ é 0.1532. Pode-se usar       
+o R^2^ ajustado para comparar modelos com quantidades diferentes de variáveis         
+explicativas como ocorre em *lm1* e *lm2*.
+
+* A média da matriz X*~2~ é de -5.2138e-18, ou seja, tende a zero, logo os         
+resíduos de X~2~ o conjunto X~1~ estão de modo ortogonal.
+
+*  O vetor dos estimadores $\hat{\beta}$~4~, $\hat{\beta}$~5~, $\hat{\beta}$~6~ da regressão *lm2*,        
+que são os níveis educacionais da mãe, do pai e o número de irmãos, ou seja o subconjunto X~2~        
+possuem os mesmos valores dos **$\hat{\beta}$** dos resíduos (que no modelo são *rlm3_*, *rlm4_* e *rlm5_*), como visto na regressão *lm6*,       
+ou seja do subconjunto X*~2~. No entanto, o mesmo não ocorre com $\hat{\beta}$~0~ (intercepto), $\hat{\beta}$~1~, $\hat{\beta}$~2~, $\hat{\beta}$~3~,         
+que variam nas duas regressões analisadas.Nota-se que o erro padrão do resíduo, o R^2^ e o R^2^ ajustado de *lm2* e *lm6* são identicos.

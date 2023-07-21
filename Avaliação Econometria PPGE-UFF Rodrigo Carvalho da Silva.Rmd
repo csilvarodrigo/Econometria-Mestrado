@@ -1,0 +1,334 @@
+---
+title: "Avaliação P3 Econometria"
+author: "Rodrigo Carvalho da Silva"
+date: '2022-06-30'
+output: html_document
+---
+
+```{r packages, echo=FALSE, include=FALSE}
+library(lmtest)
+library(stats)
+library(haven)
+library(skedastic)
+library(tidyverse)
+library(ivpack)
+library(modelsummary)
+library(VGAM)
+
+```
+
+
+## Modelo da função de demanda do consumo diário de cigarros
+
+<center> cigs =  ${\beta}$~0~ + ${\beta}$~1~lincome + ${\beta}$~2~lcigpric +
+${\beta}$~3~educ + ${\beta}$~4~age + ${\beta}$~5~agesq + 
+${\beta}$~6~restaurn + ${\beta}$~7~white + u </center>        
+
+
+
+* O modelo apresenta as seguintes variáveis:
+
+**cigs:** consumo diário de cigarros.
+
+**lincome:** o log da renda. 
+
+**lcigpric:** preço do maço do cigarro.
+
+**age:** idade.       
+
+**agesq:** idade ao quadrado.       
+
+**restaurn:** variável binária, 1 se o estado restringe o fumo em restaurantes, 0 caso contrário.
+
+**white:** variável binária, 1 para brancos, 0 caso contrário.       
+
+``` {r read_dta}
+smoke <- read_dta("smoke.dta")
+head(smoke)
+
+
+```
+
+
+### Estimação da demanda por Mínimos Quadrados Ordinários (MQO)
+
+``` {r mqo}
+smoke_mqo <- lm(cigs ~ lincome + lcigpric + educ + age + agesq + restaurn + white,
+                data = smoke)
+summary(smoke_mqo)
+
+```
+
+
+#### Teste F 
+``` {r teste f nao robusto}
+
+linearHypothesis(smoke_mqo, c("lincome=0", "lcigpric=0", "educ=0", "age=0",
+                          "agesq=0", "restaurn=0",
+                          "white=0"))
+```
+
+<div style="text-align: justify">
+  A estimação por MQO considera a variância do termo de erro como esférico, ou seja,
+que o modelo apresenta homocedasticidade. Desse forma, ao rodar a regressão por MQO
+e com um nível de significância individual de 1%, um ano a mais de educação reduz,
+em média, 0.5 unidades demandadas diariamente de cigarro. Além disso, um ano adicional 
+de idade aumenta, em média, a demanda no consumo de cigarros por dia em 0.77 unidades.
+  
+  O modelo é conjuntamente significativo dado o p-valor de 2.58${e}^{-07}$. Assim, pode-se
+concluir que o aumento do preço logarítmo do cigarro, um ano a mais de educação, 
+a presença de restrição do fumo em restaurantes e a dado que o indivíduo é etinicamente 
+branco são variáveis que reduzem, na média, a demanda do consumo de cigarros de modo
+conjunto. Enquanto que o da renda em logarítmo e um ano a mais de idade aumentam, na média,
+a demanda do consumo por cigarros conjuntamente.</div>
+
+### Teste de Heterocedasticidade: White's Test
+
+``` {r white test}
+white_lm(smoke_mqo,  interactions = FALSE, statonly = FALSE)
+
+```
+
+* Com um p-valor de 0.000954 rejeita-se a hipótese de homocedasticidade no modelo.
+
+
+### Estimação da demanda por Mínimos Quadrados Generalizados Factível (MQGF)
+
+<div style="text-align: justify">
+  Em muitos casos não é possível determinar qual é a forma exata da heterocedasticidade
+Desse modo, a estimação por MQG se torna insuficiente, assim, estimamos a regressão por
+MQGF. Para isso, fazemos o seguinte passo a passo:</div>
+
+1. Rode a regressão por MQP com peso = 1
+
+2. Encontre o resíduo estimado da regressão, o **û**
+
+3. Eleve o resíduo ao quadrado e tire o log natural
+
+4. Faça a regressão dos resídos ao quadrado em relação as variáveis independentes do modelo
+
+5. Obtenha os valores preditos, o $\hat{g}$
+
+6. Encontre o exponencial de $\hat{g}$, conhecido como $\hat{h}$
+
+7. Crie os pesos: $\frac{1}{\hat{h}}$ = *w*.
+
+8. Agora, usamos o MQP com o peso *w*
+
+``` {r mqgf}
+u_hat <- resid(smoke_mqo)
+log_u_hatsq <- log((u_hat)^2)
+reg_u_hat <- lm (log_u_hatsq ~ lincome+ lcigpric + educ + age + agesq + restaurn + white,
+                 data = smoke)
+g_hat <- fitted(reg_u_hat)
+h_hat <- exp(g_hat)
+w <- 1/h_hat
+smoke_mggf <- glm (cigs ~ lincome+ lcigpric + educ + age + agesq + restaurn + white,
+                   data = smoke, weights = w)
+summary(smoke_mggf)
+
+```
+
+
+#### Teste F robusto à heterocedasticidade
+``` {r teste f}
+
+linearHypothesis(smoke_mggf, c("lincome=0", "lcigpric=0", "educ=0", "age=0",
+                          "agesq=0", "restaurn=0",
+                          "white=0"), white.adjust = "hc1")
+
+```
+
+  <div style="text-align: justify"> 
+  A partir dos resultados da estimação por MQGF, observa que o modelo é conjuntamente
+significativo, pois o p-valor é extremamente baixo, no valor de 2.2${e}^{-16}$.Assim, o 
+aumento do preço do cigarro em logarítimo, um ano a mais de
+escolaridade, um ano a mais na idade ao quadrado, se é residente em estado com leis 
+restritivas a fumo em restaurante e se é etnicamente branco são variáveis que reduzem, 
+na média, a demanda do consumo por cigarros de modo conjunto. Enquanto que o aumento 
+da renda logarítma e o acréscimo de um ano na idade aumentam, na média,a demanda do 
+consumo por cigarros conjuntamente. 
+
+  E com base no nível de significância individual de 1%, temos que o  acréscimo de 
+1% na renda, aumenta o consumo médio de cigarros em 1.26 unidades por dia, tudo o mais
+constante; um ano a mais de educação reduz em média 0.4676 unidade de cigarros demandados,
+tudo o mais constante; um ano a mais de idade aumenta a demanda em 0.4854 unidades de cigarros 
+diariamente. Além disso, ser morador em estado que restringe o fumo em restaurantes acarreta a 
+redução, em média, de 3.5539 unidades demandadas, com tudo o mais constante.</div>
+
+
+###  Estimação da demanda por Tobit
+
+``` {r tobit}
+smoke_tobit <- AER::tobit(cigs ~ lincome+ lcigpric + educ + age + agesq + restaurn + white,
+                          data = smoke)
+summary(smoke_tobit)
+
+```
+
+
+#### Efeito marginal na média
+
+``` {r efeito marginal tobit}
+summary(marginaleffects::marginaleffects(smoke_tobit))
+```
+
+ <div style="text-align: justify">
+  Das 807 observações, 497 estão censuradas à esquerda. Quanto ao nível de signicância 
+individual de 1% temos que o efeito da presença de 
+restrições do fumo em restaurante contribui para 
+a redução da demanda por cigarros e o aumento de um ano na 
+escolaridade também reduz a demanda por cigarros. Enquanto 
+que um aumento na idade eleva a demanda do consumo por 
+cigarros. 
+
+Além disso, o modelo é conjuntamente significativo, com um 
+p-valor na ordem de 1.4986${e}^{-08}$. Logo, o acréscimo: do preço do cigarro, em log, da escolaridade e a presença 
+de leis restritivas do fumo em restaurantes e indivíduos 
+caracteristicamente brancos tendem, na
+média, a reduzirem a demanda por cigarro. Enquanto que o 
+aumento da renda, em log, e o 
+aumento da idadetendem, na média, o aumento da demanda do 
+consumo de cigarros. </div>
+
+
+### Comparação entre MQO, MQGF e Tobit
+
+``` {r modelsummary()}
+list_smoke <- list(MQO=smoke_mqo, MQGF=smoke_mggf, Tobit=smoke_tobit)
+msummary(list_smoke)
+
+```
+
+  <div style="text-align: justify">
+  Após rodar a mesma amostra através de três modelos diferentes: Mínimos Quadrados
+Ordinários (MQO), Mínimos Quadrados Generalizados Factíveis (MQGF), Tobit; observa
+a mesma direção dos sinais das variáveis independentes. No entanto, dada a natureza 
+da amostra é contraproducente o uso de MQO, haja vista que após a realização do Teste 
+de White foi rejeitada a hipótese de homocedasticidade, assim o termo de erro não é 
+esférico, isso decorre do termo de erro ser concebido como retirado de uma distribuição 
+diferente para cada observação. Apesar dos estimadores de MQO não serem viesados, os 
+estimadores da variância por MQO são viesados. Assim, é recomendável o uso do MQG, que 
+pondera o comportamento dos resíduos, no entanto, como não se sabe a forma exata da 
+heterocedasticidade é preciso modelar a função e utilizar o MQGF para estimar os parâmetros 
+desconhecidos do modelo. Entretanto, a amostra apresenta uma quantidade expressiva de indivíduos 
+que não fumam, ou seja, há diversos *cigs*=0 e como o objetivo é modelar a demanda do consumo por cigarros é recomendável o uso 
+do modelo Tobit para a solução de canto. Assim, foi confirmado uma censura à esquerda, ou seja, dada a distribuição 
+da variável *cigs*, há um grande represamento de não-fumantes, o que corresponde o lado esquerdo da distribuição,
+que é continuamente distribuída. Portanto, com base nas características da amostra o uso do 
+modelo **Tobit** é o mais indicado, entre os três, para a análise da demanda do consumo por cigarros. </div>
+
+
+## Modelo com variável binária
+
+  * Vamos criar uma variável binária *smoker*, onde:
+
+    + **1:** para fumantes
+  
+    + **0:** para não fumantes
+  
+  
+``` {r novas colunas}
+smoke$smoker <- ifelse(smoke$cigs==0, 0,1)
+smoke$young <-ifelse(smoke$age<=25, 1,0)
+smoke$adult <- ifelse(smoke$age>25 & smoke$age<=60, 1,0)
+smoke$senior <- ifelse(smoke$age>60, 1,0)
+
+```
+
+<div style="text-align: justify"> 
+  **Obs.:** Foram criadas três dummies, *young* para indivíduos entre 17 e 25 anos,
+*adult* para indivíduos entre 26 e 60 anos, e *senior* para indivíduos acima de 60 anos. </div>
+
+
+### Probit
+
+
+ <center>smoker= ${\beta}$~0~ + ${\beta}$~1~lincome + ${\beta}$~2~lcigpric +
+${\beta}$~3~educ + ${\beta}$~4~restaurn + ${\beta}$~5~white + ${\beta}$~6~young + 
+${\beta}$~7~adult + u </center>
+
+``` {r probit}
+smoke_probit <- glm(formula = smoker ~ lincome + lcigpric + educ + 
+                      restaurn +  white + young + adult, family = binomial
+                    (link="probit"), data = smoke)
+summary(smoke_probit)
+
+```
+
+### Efeito Marginal Médio - Probit
+
+``` {r probit mfx}
+mfx::probitmfx(formula = smoker ~ lincome + lcigpric + educ +
+                                restaurn +  white + young + adult,
+                                data = smoke,  atmean = FALSE)
+
+```
+
+  <div style="text-align: justify">
+  Com base nos resultados obtidos a partir do modelo probit a respeito da variável explicada
+em ser ou não fumante e sob efeito marginal médio têm-se as seguintes conclusões: dado o 
+nível de significância de 1%, o grupo brancos não é estatisticamente significante, enquanto
+que para os indivíduos jovens (17-25 anos) probabilidade de fumar aumenta em 0.1846 e para os 
+indivíduos adultos (26-60 anos) a probabilidade de fumar aumenta em 0.2691. Ou seja, a amostra
+indica que os jovens têm uma probablidade de fumar menor que os adultos com tudo o mais
+constante. </div>
+
+
+### Modelo Multinomial Ordenado
+
+  <div style="text-align: justify">
+  Os modelos multinomiais têm como função descrever a probabilidade de cada possível resultado
+como uma função pessoal ou característica específica alternativa. No caso presente, trata-se de
+um modelo multinomial ordenado, pois a variável dependente, *smoker_level*, indica a intensidade 
+do tabagismo entre os indivíduos da amostra. Tal modelo não é linear, por isso a estimação ocorre
+por Máxima Verossimilhança. A distribuição de probabilidade utilizada é a probit. Para fins 
+didáticos, considera-se a quantidade máxima diária de consumo de um maço de cigarros (20 unidades) 
+como o coorte entre fumantes moderados e muito fumantes. </div>
+
+
+  * Intensidade do tababismo
+  
+    + **1:** não-fumantes
+    
+    + **2:** fumantes moderados (até 20 unidades de cigarros por dia)
+    
+    + **3:** muito fumantes (acima de 20 unidade de cigarros por dia)
+    
+``` {r mult ordenado}
+smoke <- smoke %>%
+  mutate(smoker_level = case_when(
+  (smoke$cigs == 0) ~ 1,
+  (smoke$cigs > 0 & smoke$cigs <=20)~ 2,
+  (smoke$cigs > 20) ~ 3
+))
+
+```
+
+``` {r probit mult}
+
+probit_mult <- MASS::polr(as.factor(smoker_level) ~ lincome + lcigpric + educ +
+                                restaurn +  white + young + adult,
+                                data = smoke, Hess = TRUE, method = c("probit") )
+summary(probit_mult)
+rr_probit_multi <- exp(coef(probit_mult))
+rr_probit_multi
+
+
+```
+
+   <div style="text-align: justify">
+  Com base nos resultados do **risco relativo**, têm-se as seguintes conclusões: os jovens
+tem o risco de chance, *odds*, de serem fumantes (moderados ou forte com base nos não fumantes)
+em torno de 1.507 vezes se comparado aos indivíduos não jovens, tudo o mais constante. Enquanto 
+que o *odds* para adultos serem fumantesé em torno de 2.1460 vezes, tudo o mais constante. E para os indivíduos
+brancos serem fumantes o risco relativo é em torno de 0.9711 vezes, tudo o mais constante.
+
+  Quando se compara com o modelo binário probit também se observa uma probabilidade menor dos 
+jovens serem fumantes, em média, se comparado com os fumantes adultos a 1% de significância e
+tudo o mais constante. Logo, para melhor diagnóstico do comportamento dos fumantes com o objetivo de
+elaborar políticas públicas anti-tabagismo é recomendável o uso do modelo multinomial ordenado, 
+principalmente se o foco for entre os tabagistas moderados dada a intensidade do vício, ou seja,
+focalizar a campanha para aqueles que fumam de forma ocasional. Enquanto que tal especificação 
+não é possível no modelo binário probit. Haja vista que o foco, nesse caso, seria a 
+homogeneização do comportamento do fumante independentemente da intensidade desse hábito. </div>

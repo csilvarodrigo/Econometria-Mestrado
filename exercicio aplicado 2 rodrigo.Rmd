@@ -1,0 +1,261 @@
+---
+title: "Lista Aplicada 2"
+author: "Rodrigo Carvalho da Silva"
+date: '2022-06-06'
+output: html_document
+---
+
+# Exercício Aplicado 2 - Econometria Mestrado
+## Rodrigo Carvalho da Silva - M013.122.008
+
+```{r packages, echo=FALSE, include=FALSE}
+
+getwd()
+library(lmtest)
+library(stats)
+library(haven)
+library(skedastic)
+library(visreg)
+library(ggplot2)
+require(ggplot2)
+library(ivpack)
+library(modelsummary)
+library(tidyverse)
+```
+
+### Questão 1
+
+<center>smoke = $\hat{\beta}$~0~ + $\hat{\beta}$~1~lcigpric + $\hat{\beta}$~2~lincome + $\hat{\beta}$~3~educ + $\hat{\beta}$~4~age +$\hat{\beta}$~5~agesq +
+$\hat{\beta}$~6~restaurn + $\hat{\beta}$~7~white + u</center>
+
+
+* O modelo apresenta as seguintes variáveis       
+
+**smoke:** variável binária, 1 para fumantes, 0 para não fumantes.        
+
+**lcigpric:** preço do maço do cigarro       
+
+**lincome:** o log da renda.        
+
+**educ:** anos de escolaridade.       
+
+**age:** idade.       
+
+**agesq:** idade ao quadrado.       
+
+**restaurn:** variável binária,1 se o estado proíbe fumar em restaurantes, 0 caso contrário.        
+
+**white:** variável binária,1 para brancos, 0 caso contrário.       
+
+
+``` {r read dta, echo=FALSE}
+smoke <- read_dta("smoke.dta")
+head(smoke)
+```
+
+#### A regressão por MQO gera o seguinte resultado:
+
+``` {r mqo_smoke, echo=FALSE}
+mqo_smoke <- lm (smoke ~ lcigpric +lincome +educ +age + agesq +restaurn + white,
+                 data = smoke)
+summary(mqo_smoke)
+```
+
+Somente educação, idade, idade ao quadrado e permissão de fumar em restaurante são significativos a 1%.        
+
+
+É preciso verificar a presença de heterocedasticidade no modelo, para isso, usa-se o Teste White.        
+
+
+``` {r skedastic, echo=FALSE}
+white_lm(mqo_smoke)
+```
+Rejeita-se a hipótese nula, ou seja, o modelo não é homocedástico, pois o p-valor é próximo de zero.
+
+#### Regressão por MQG
+
+``` {r glm smoke, echo=FALSE}
+mqg_smoke <-glm(formula = smoke ~ lcigpric +lincome +educ +age + agesq +restaurn + white,
+                 data = smoke, family = binomial(link = "probit"))
+summary(mqg_smoke)
+```
+O aumento do nível de escolaridade e a presença de restrições de fumo em restaurante reduz a probabilidade do individuo fumar um ou mais cigarros por dia.
+
+#### Tabela Comparativa das duas Regressões
+
+``` {r tabela comparativa, echo=FALSE}
+cig_list <-list(MQO=mqo_smoke, Probit=mqg_smoke)
+msummary(cig_list)
+```
+A direção dos sinais das variáveis permanecem iguais nas duas estimações, exceto para idade ao quadrado.
+
+#### Em seguida, calcula-se a média dos efeitos marginais individuais:
+
+``` {r efeito marginal, echo=FALSE}
+probitescalar <- mean(dnorm(predict(mqg_smoke,type = "link")))
+probit_smoke <- probitescalar * coef(mqg_smoke)
+probit_smoke
+```
+
+#### Verificando a eficácia do modelo:
+
+``` {r eficacia, , echo=FALSE}
+table(verdadeiro = smoke$smoke, previsto=round(fitted(mqg_smoke)))
+acertos <- 431+70
+total <- 240+66+acertos
+taxa_de_acertos <- acertos/total
+taxa_de_acertos
+
+```
+
+O modelo apresenta 62.08% de eficácia.        
+
+Com uma idade próxima dos 40 anos, um ano a mais de idade começa a redução do consumo do cigarro, conforme o gráfico a seguir:
+
+![Probabilidade de fumar de acordo com a idade](nprobfumar.png)
+
+
+#### Verificando os valores preditos
+
+``` {r summary, echo=FALSE}
+summary(mqg_smoke$fitted.values)
+```
+
+Encontram-se entre [0;1], com o valor mínimo de 0.009121 e valor máximo de 0.700010.
+
+
+### Questão 2
+
+<center>arr86 = $\hat{\beta}$~0~ + $\hat{\beta}$~1~pcnv + $\hat{\beta}$~2~avgsen + $\hat{\beta}$~3~tottime + $\hat{\beta}$~4~ptime86 +$\hat{\beta}$~5~qemp86 + u</center>               
+
+* O modelo apresenta as seguintes variáveis 
+
+**arr86:** variável binária, 1 para presidiários em 1986, 0 caso contrário.       
+
+**pcnv:** proporção de convicção anteriores.        
+
+**avgsen:** média da sentença promulgada em meses.        
+
+**tottime:** tempo na prisão em meses a partir dos 18 anos.       
+
+**ptime86:** meses no cárcere ao longo de 1986.       
+
+**qemp86:** número de trimestres de 1986 em que esteve trabalhando.       
+
+
+#### Estimando o modelo por MQO:
+
+``` {r crime, echo=FALSE}
+crime <-read_dta("crime1.dta")
+head(crime)
+mqo_crime <- lm (arr86 ~ pcnv+ avgsen + tottime + ptime86 + qemp86, data = crime)
+summary(mqo_crime)
+```
+
+#### Aplicando o teste de Heterocedasticidade:
+
+``` {r bp test, echo=FALSE}
+bptest(mqo_crime)
+```
+Rejeita-se a hipótese de homocedasticidade, pois o p-valor é extremamente baixo.
+
+#### Estimando o modelo como uma distribuição probabilística
+
+``` {r lmtest::glm, echo=FALSE}
+probit_crime <- glm(arr86 ~ pcnv+ avgsen + tottime + ptime86 + qemp86, data = crime, family = binomial(link = "probit"))
+summary(probit_crime)
+```
+
+#### Estimação por MQP
+
+``` {r lmtest::lm, echo=FALSE}
+pesos <- 1 / lm(abs(mqo_crime$residuals) ~ mqo_crime$fitted.values)$fitted.values^2
+mqp_crime <- lm(arr86 ~ pcnv+ avgsen + tottime + ptime86 + qemp86, data = crime,
+                weights = pesos)
+summary(mqp_crime)
+```
+Tanto a estimação como probit, quanto por MQO mantém as mesmas direções dos sinais, exceto o intercepto.
+
+#### Comparação dos resultados das estimações por MQO e MQP
+
+``` {r modelsummary 2, echo=FALSE}
+list_crime <- list( MQO=mqo_crime, MQP=mqp_crime)
+msummary(list_crime)
+
+```
+
+#### Aplicando o Teste de Verossimilhança
+
+``` {r lmtest::lrtest(), echo=FALSE}
+reduce_probit_crime <- glm(arr86 ~ pcnv + ptime86 + qemp86, data = crime,
+                           family = binomial(link = "probit"))
+summary(reduce_probit_crime)
+lmtest::lrtest(probit_crime, reduce_probit_crime)
+```
+Com um p-valor de 0.3181 não rejeita-se a hipótese nula, ou seja, pode-se usar o modelo reduzido. Portanto, *tottime* e *avgsen* não são conjuntamente significativos em um nível de significância de 5%.
+
+
+### Questão 3
+
+<center>$\Delta$inf~t~ =  $\hat{\beta}$~0~ + $\hat{\beta}$~1~unemp~t~ + e~t~ </center>       
+
+
+Onde:       
+
+**inf~t~** é a variação da inflação entre os anos *t* e *t-1*       
+
+**unemp~t~** é a taxa de desemprego no ano *t*        
+
+**e~t~** é o choque de oferta       
+
+
+``` {r read_dta, echo=FALSE}
+phillips <- read_dta("phillips.dta")
+phillips1 <- na.omit(phillips)
+head(phillips1)
+
+```
+
+#### Regressão por MQO
+
+```{r mqo phillips, echo=FALSE}
+mqo_phillips1 <- lm (phillips1$cinf ~ phillips1$unem)
+summary(mqo_phillips1)
+```
+
+Se houver correlação entre o choque de oferta e a taxa de desemprego, a inferencia estará errada ao usar MQO, pois fere o principio da não-autocorrelação de Gauss-Markov. Logo, o MQO será viesado e inconsistente.       
+
+
+Sob a hipótese de que E(e~i~| unemp~t-1~)=0, o estimador não será viesado e será consistente, pois não há endogeneidade. Enquanto que, ei e unemp são correlacionados, logo EMQO é inconsistente e viesado. Logo, é preciso usar uma variável instrumental para solucionar o problema da endogeneidade.
+
+#### Regressão por MQO usando unemp~t-1~
+
+``` {r mqo phillips1 vi, echo=FALSE}
+mqo_phillips1_vi <- lm(phillips1$cinf ~ phillips1$unem_1)
+summary(mqo_phillips1_vi)
+
+```
+
+#### Regressão entre unemp~t~ e unemp~t-1~
+
+``` {r reg_unemp, echo=FALSE}
+reg_unemp <- lm (phillips1$unem ~ phillips1$unem_1)
+summary(reg_unemp)
+```
+O aumento em 1 ponto percentual do desemprego em *t-1*, aumenta em média 0.74% o desemprego em *t*.
+
+#### Regressão: MQO em 2 estágios, com *vi* sendo unemp~t-1~
+
+``` {r ivreg, echo=FALSE}
+iv_reg_phillips <- ivreg(phillips1$cinf ~ phillips1$unem | phillips1$unem_1)
+summary(iv_reg_phillips, vcov. = sandwich, diagnostics = TRUE)
+```
+Rejeita-se a hipóstese nula de que o instrumento unemp*t-1* seja fraco, dado o p-valor ser baixíssimo.
+
+``` {r modelsummary, echo=FALSE}
+lista_phillips <- list(MQO = mqo_phillips1, IV = iv_reg_phillips)
+msummary(lista_phillips)
+```
+A variação de 1% no indice geral de preços tem efeito menor redução da taxa de desemprego, quando se estima por VI se comparado com o MQO.
+
+
